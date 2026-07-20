@@ -677,7 +677,13 @@ ThreatReference const* ThreatManager::ReselectVictim()
 
 void ThreatManager::ProcessAIUpdates()
 {
-    CreatureAI* ai = ASSERT_NOTNULL(_owner->ToCreature())->AI();
+    if (!_owner || !_owner->ToCreature()) 
+    { 
+        return; 
+    }
+    CreatureAI* ai = _owner->ToCreature()->AI();
+    
+    // CreatureAI* ai = ASSERT_NOTNULL(_owner->ToCreature())->AI();
     std::vector<ObjectGuid> v(std::move(_needsAIUpdate)); // _needsAIUpdate is now empty in case this triggers a recursive call
     if (!ai)
         return;
