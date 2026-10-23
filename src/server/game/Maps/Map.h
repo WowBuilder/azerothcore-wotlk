@@ -68,6 +68,7 @@ class StaticTransport;
 class MotionTransport;
 class PathGenerator;
 class WorldSession;
+class SpawnedPoolData;
 
 enum WeatherState : uint32;
 
@@ -380,6 +381,9 @@ public:
         return nullptr;
     }
 
+    SpawnedPoolData& GetPoolData() { return *_poolData; }
+    [[nodiscard]] SpawnedPoolData const& GetPoolData() const { return *_poolData; }
+
     MapInstanced* ToMapInstanced() { if (Instanceable())  return reinterpret_cast<MapInstanced*>(this); else return nullptr;  }
     [[nodiscard]] MapInstanced const* ToMapInstanced() const { if (Instanceable())  return (MapInstanced const*)((MapInstanced*)this); else return nullptr;  }
 
@@ -429,6 +433,8 @@ public:
 
     void SaveCreatureRespawnTime(ObjectGuid::LowType dbGuid, time_t& respawnTime);
     void RemoveCreatureRespawnTime(ObjectGuid::LowType dbGuid);
+    // Queues the spawn for the next respawn pass and lets it through the DONE-boss hold, as force bypasses CanRespawn in compat mode
+    void ForceCreatureRespawn(ObjectGuid::LowType dbGuid);
     void SaveGORespawnTime(ObjectGuid::LowType dbGuid, time_t& respawnTime);
     void RemoveGORespawnTime(ObjectGuid::LowType dbGuid);
     [[nodiscard]] std::unordered_map<ObjectGuid::LowType, time_t> const& GetCreatureRespawnTimes() const { return _creatureRespawnTimes; }
@@ -645,6 +651,7 @@ private:
     void _RemoveObjectFromUpdateList(WorldObject* obj);
 
     std::unordered_map<ObjectGuid::LowType /*dbGUID*/, time_t> _creatureRespawnTimes;
+    std::unordered_set<ObjectGuid::LowType> _forcedCreatureRespawns;
     std::unordered_map<ObjectGuid::LowType /*dbGUID*/, time_t> _goRespawnTimes;
 
     // Time-ordered index for ProcessRespawns() — avoids O(n) full scan.
@@ -664,6 +671,8 @@ private:
         }
     };
     std::set<RespawnEntry> _respawnQueue;
+
+    std::unique_ptr<SpawnedPoolData> _poolData;
 
     std::unordered_set<uint32> _toggledSpawnGroupIds;
     uint32 _respawnCheckTimer{0};

@@ -2382,7 +2382,7 @@ void ObjectMgr::LoadCreatures()
         data.spawnMask          = fields[14].Get<uint8>();
         data.phaseMask          = fields[15].Get<uint32>();
         int16 gameEvent         = fields[16].Get<int16>();
-        uint32 PoolId           = fields[17].Get<uint32>();
+        data.poolId             = fields[17].Get<uint32>();
         data.npcflag            = fields[18].Get<uint32>();
         data.unit_flags         = fields[19].Get<uint32>();
         data.dynamicflags       = fields[20].Get<uint32>();
@@ -2490,8 +2490,9 @@ void ObjectMgr::LoadCreatures()
             WorldDatabase.Execute(stmt);
         }
 
-        // Add to grid if not managed by the game event or pool system
-        if (gameEvent == 0 && PoolId == 0)
+        // Add to grid if not managed by the game event. Pooled spawns are in
+        // the grid data too; the grid loader filters them by pool state.
+        if (gameEvent == 0)
             AddCreatureToGrid(spawnId, &data);
 
         ++count;
@@ -3035,7 +3036,7 @@ void ObjectMgr::LoadGameobjects()
 
         data.phaseMask      = fields[15].Get<uint32>();
         int16 gameEvent     = fields[16].Get<int16>();
-        uint32 PoolId        = fields[17].Get<uint32>();
+        data.poolId         = fields[17].Get<uint32>();
 
         if (data.rotation.x < -1.0f || data.rotation.x > 1.0f)
         {
@@ -3094,7 +3095,7 @@ void ObjectMgr::LoadGameobjects()
             WorldDatabase.Execute(stmt);
         }
 
-        if (gameEvent == 0 && PoolId == 0)                      // if not this is to be managed by GameEvent System or Pool system
+        if (gameEvent == 0)                      // if not this is to be managed by GameEvent System
             AddGameobjectToGrid(guid, &data);
     } while (result->NextRow());
 
@@ -5131,6 +5132,26 @@ void ObjectMgr::LoadQuests()
         Field* fields = result->Fetch();
 
         Quest* newQuest = new Quest(fields);
+
+        // a choice reward with zero quantity would be shown to the player but never given
+        bool hasZeroCountChoice = false;
+        for (uint8 j = 0; j < QUEST_REWARD_CHOICES_COUNT; ++j)
+        {
+            if (newQuest->RewardChoiceItemId[j] && !newQuest->RewardChoiceItemCount[j])
+            {
+                LOG_ERROR("sql.sql",
+                    "Quest {} has `RewardChoiceItemId{}` = {} but `RewardChoiceItemCount{}` = 0, quest skipped.",
+                    newQuest->GetQuestId(), j + 1, newQuest->RewardChoiceItemId[j], j + 1);
+                hasZeroCountChoice = true;
+            }
+        }
+
+        if (hasZeroCountChoice)
+        {
+            delete newQuest;
+            continue;
+        }
+
         _questTemplates[newQuest->GetQuestId()] = newQuest;
     } while (result->NextRow());
 
@@ -5604,13 +5625,6 @@ void ObjectMgr::LoadQuests()
                     LOG_ERROR("sql.sql", "Quest {} has `RewardChoiceItemId{}` = {} but item with entry {} does not exist, quest will not reward this item.",
                                      qinfo->GetQuestId(), j + 1, id, id);
                     qinfo->RewardChoiceItemId[j] = 0;          // no changes, quest will not reward this
-                }
-
-                if (!qinfo->RewardChoiceItemCount[j])
-                {
-                    LOG_ERROR("sql.sql", "Quest {} has `RewardChoiceItemId{}` = {} but `RewardChoiceItemCount{}` = 0, quest can't be done.",
-                                     qinfo->GetQuestId(), j + 1, id, j + 1);
-                    // no changes, quest can't be done
                 }
             }
             else if (qinfo->RewardChoiceItemCount[j] > 0)
